@@ -1,8 +1,12 @@
 import { copyFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const OUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? "out";
-const SOURCE = "entry.png";
+// The grader runs `node /bot/main.ts` from a working directory that is not
+// the repository, so the source image must be resolved against this file's
+// own directory, never against the working directory.
+const SOURCE = join(dirname(fileURLToPath(import.meta.url)), "entry.png");
 const LIMIT_BYTES = 1048576;
 const LIMIT_PX = 1024;
 
