@@ -1,56 +1,91 @@
-import { copyFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+// News image, 26 November 2026 — v3 entry point.
+//
+// The picture itself is produced offline and shipped next to this file as
+// entry.png. All this program does at grade time is check that the picture
+// is a well-formed PNG inside the competition limits and place an exact
+// copy of it (plus a small JSON sidecar) into the output directory.
+//
+// It never touches the network, never looks at the clock, never rolls dice:
+// the same input bytes always give the same output bytes.
+
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const OUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? "out";
-// The grader runs `node /bot/main.ts` from a working directory that is not
-// the repository, so the source image must be resolved against this file's
-// own directory, never against the working directory.
-const SOURCE = join(dirname(fileURLToPath(import.meta.url)), "entry.png");
-const LIMIT_BYTES = 1048576;
-const LIMIT_PX = 1024;
+// Competition limits for the delivered picture.
+const MAX_BYTES = 1024 * 1024;
+const MAX_SIDE = 1024;
+const EXPECTED_DEPTH = 8; // 8-bit samples
+const EXPECTED_COLOUR = 2; // truecolour RGB, no alpha, no palette
 
-const data = readFileSync(SOURCE);
-const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-if (!data.subarray(0, 8).equals(pngMagic)) {
-  throw new Error("entry.png is not a PNG file");
-}
-if (data.length > LIMIT_BYTES) {
-  throw new Error(`entry.png is ${data.length} bytes, over the ${LIMIT_BYTES} byte limit`);
-}
-if (data.length < 33 || data.toString("ascii", 12, 16) !== "IHDR") {
-  throw new Error("entry.png has no IHDR chunk where one is expected");
-}
-const width = data.readUInt32BE(16);
-const height = data.readUInt32BE(20);
-const bitDepth = data[24];
-const colourType = data[25];
-if (width > LIMIT_PX || height > LIMIT_PX) {
-  throw new Error(`entry.png is ${width}x${height}, over the ${LIMIT_PX}x${LIMIT_PX} limit`);
-}
-if (bitDepth !== 8 || colourType !== 2) {
-  throw new Error(`entry.png must be 8-bit RGB, got depth ${bitDepth} colour ${colourType}`);
-}
-const iendAt = data.length - 12;
-if (data.toString("ascii", iendAt + 4, iendAt + 8) !== "IEND") {
-  throw new Error("entry.png does not end with an IEND chunk");
-}
-if (data.readUInt32BE(iendAt) !== 0) {
-  throw new Error("entry.png IEND chunk has a non-zero length");
+const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+function fail(message) {
+  throw new Error(`entry.png: ${message}`);
 }
 
-mkdirSync(OUT_DIR, { recursive: true });
-const target = join(OUT_DIR, "entry.png");
-copyFileSync(SOURCE, target);
-const written = readFileSync(target);
-if (!written.equals(data)) {
-  throw new Error("copied entry.png differs from the source");
+function readChunkType(bytes, at) {
+  return bytes.toString("ascii", at + 4, at + 8);
 }
-writeFileSync(join(OUT_DIR, "entry.json"), JSON.stringify({
-  file: "entry.png",
-  width,
-  height,
-  bytes: data.length,
-  format: "png",
-}, null, 2) + "\n");
-console.log(`wrote ${target} (${width}x${height}, ${statSync(target).size} bytes)`);
+
+// Inspects the PNG header and tail. Returns the picture dimensions when
+// everything is inside the limits, and throws otherwise.
+function inspectPng(bytes) {
+  if (bytes.length < 8) fail("file is shorter than a PNG signature");
+  for (let i = 0; i < SIGNATURE.length; i += 1) {
+    if (bytes[i] !== SIGNATURE[i]) fail("does not start with the PNG signature");
+  }
+  if (bytes.length > MAX_BYTES) {
+    fail(`is ${bytes.length} bytes, over the ${MAX_BYTES} byte limit`);
+  }
+  if (bytes.length < 33 || readChunkType(bytes, 8) !== "IHDR") {
+    fail("has no IHDR chunk right after the signature");
+  }
+  if (bytes.readUInt32BE(8) !== 13) {
+    fail("IHDR chunk has a length other than 13");
+  }
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  if (width === 0 || height === 0) {
+    fail("has a zero width or height");
+  }
+  if (width > MAX_SIDE || height > MAX_SIDE) {
+    fail(`is ${width}x${height}, over the ${MAX_SIDE}x${MAX_SIDE} limit`);
+  }
+  const depth = bytes[24];
+  const colour = bytes[25];
+  if (depth !== EXPECTED_DEPTH || colour !== EXPECTED_COLOUR) {
+    fail(`must be 8-bit RGB, got depth ${depth} colour type ${colour}`);
+  }
+  const iendStart = bytes.length - 12;
+  if (readChunkType(bytes, iendStart) !== "IEND") {
+    fail("does not end with an IEND chunk");
+  }
+  if (bytes.readUInt32BE(iendStart) !== 0) {
+    fail("IEND chunk has a non-zero length");
+  }
+  return { width, height };
+}
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const sourcePath = join(scriptDir, "entry.png");
+const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "out";
+
+const picture = readFileSync(sourcePath);
+const { width, height } = inspectPng(picture);
+
+mkdirSync(outDir, { recursive: true });
+const destPath = join(outDir, "entry.png");
+copyFileSync(sourcePath, destPath);
+
+const delivered = readFileSync(destPath);
+if (!delivered.equals(picture)) {
+  fail("the delivered copy differs from the source picture");
+}
+
+writeFileSync(
+  join(outDir, "entry.json"),
+  JSON.stringify({ file: "entry.png", width, height, bytes: picture.length, format: "png" }, null, 2) + "\n",
+);
+
+console.log(`wrote ${destPath} (${width}x${height}, ${delivered.length} bytes)`);

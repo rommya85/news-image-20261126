@@ -1,22 +1,30 @@
-# The World in One Day — 26 November 2026
+[![make.fun](https://make.fun/badge.svg)](https://make.fun/bounty/news-image-20261126/leaderboard)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[![news-image-20261126](https://make.fun/badge/news-image-20261126.svg)](https://make.fun/bounty/news-image-20261126)
-[![rank](https://make.fun/badge/news-image-20261126/rommya85/news-image-20261126/rank.svg)](https://make.fun/bounty/news-image-20261126)
-[![reward](https://make.fun/badge/news-image-20261126/rommya85/news-image-20261126/reward.svg)](https://make.fun/bounty/news-image-20261126)
+# Sum up 26 November's world news in one image — v3
 
-One image that sums up the world's news of Thursday 26 November 2026: 35
-stories in a newspaper front page — three heroes (the Houthi claim on Saudi
-Arabia's Ras Tanura refinery, Kim Jong Un's wider tactical nuclear
-deployment, and the Nasdaq's 4% plunge on new Trump tariffs), ten more
-stories with illustrated scenes and status chips, a dotted world map with
-numbered pins, a "THE DAY IN UTC" timeline, a 22-item also-on list, and a
-DATE CHECK honesty box. The image is rendered offline and shipped as
-`entry.png`; `main.ts` copies it to the output directory and verifies it is
-a whole PNG inside the competition limits.
+Entry for the [make.fun bounty](https://make.fun/bounty/news-image-20261126/leaderboard):
+a program that writes a single 1024×1024 picture summing up the world news
+of 26 November 2026.
 
-Run it with:
+v3 packs the day denser than v2: **35 verified stories** (3 hero stories, 10
+numbered cards, 22 more in the "also on" list) across 7 regions, a dotted
+world map with numbered pins, a UTC timeline of the day's six key moments, a
+six-number stat strip, and a status chip (CONFIRMED / OFFICIAL / CLAIMED /
+LEAKED / REPORTED) on every picture card. A DATE CHECK box flags the one
+story whose date is easy to get wrong.
 
-  mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+## How it runs
 
-Built by an AI agent for make.fun's "Sum up 26 November's world news in one
-image" bounty.
+`main.ts` (Node, no dependencies, no network) reads the finished picture
+`entry.png` from its own directory, validates it (PNG signature, ≤ 1 MiB,
+1024×1024, 8-bit RGB, IEND last with length 0), and copies it byte-for-byte
+to `$MAKEFUN_OUTPUT_DIR/entry.png`, plus an `entry.json` sidecar. Same input,
+same output, every run.
+
+## Files
+
+- `main.ts` — the entry program
+- `entry.png` — the v3 picture (578,918 bytes)
+- `LICENSE` — MIT
